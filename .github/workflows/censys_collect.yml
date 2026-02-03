@@ -1,0 +1,48 @@
+name: censys-collect
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎日 00:10 JST に近いタイミング（GitHub cron は UTC）
+    - cron: "10 15 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Tokyo
+      CENSYS_API_ID: ${{ secrets.CENSYS_API_ID }}
+      CENSYS_API_SECRET: ${{ secrets.CENSYS_API_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run collector
+        run: |
+          python src/censys_collect.py \
+            --query '(host.services.endpoints.http.html_title:{"Moltbot Control", "clawdbot Control"}) and host.location.country = "Japan"' \
+            --titles 'Moltbot Control,clawdbot Control' \
+            --per-page 100 \
+            --max-pages 0 \
+            --sleep 0.2
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: censys-results
+          path: out/*
+          if-no-files-found: warn
